@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import GameService from '../services/gameService';
 import SessionService from '../services/sessionService';
-import './CharacterSelection.css'; // Opcional: puedes agregar estilos específicos
 
 const CharacterSelection = ({ onCharacterSelected }) => {
     const [availablePlayers, setAvailablePlayers] = useState([]);
