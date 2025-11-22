@@ -23,22 +23,18 @@ function App() {
 
   const initializeApp = async () => {
     try {
+      // Cargar juego
       const game = await GameService.getGame();
-      if (game) {
-        setCurrentGame(game);
-      }
+      setCurrentGame(game);
 
+      // Verificar sesión
       const session = await SessionService.getCurrentSession();
       if (session) {
         setCurrentUser(session);
         setCurrentView('user');
-        setIsAdmin(false);
-      } else {
-        setCurrentUser(null);
-        setIsAdmin(true);
       }
     } catch (error) {
-      console.error('Error initializing app:', error);
+      console.error('Error inicializando app:', error);
     } finally {
       setLoading(false);
     }
@@ -211,5 +207,6 @@ function App() {
     </div>
   );
 }
+
 
 export default App;

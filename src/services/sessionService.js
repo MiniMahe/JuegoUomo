@@ -1,7 +1,8 @@
 import JsonDatabaseService from './jsonDatabaseService';
 
 class SessionService {
-    static createSession(userName, playerName) {
+    // Crear sesión
+    static async createSession(userName, playerName) {
         const session = {
             id: 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             userName: userName.trim(),
@@ -11,115 +12,119 @@ class SessionService {
             isActive: true
         };
 
-        // Guardar en sessionStorage para esta pestaña
+        // Guardar en sessionStorage
         sessionStorage.setItem('currentSession', JSON.stringify(session));
 
-        // Guardar en base de datos JSON compartida
-        JsonDatabaseService.updateSession(session);
+        // Guardar en base de datos
+        await JsonDatabaseService.updateSession(session);
 
-        return Promise.resolve(session);
+        return session;
     }
 
-    static getCurrentSession() {
+    // Obtener sesión actual
+    static async getCurrentSession() {
         try {
             const sessionData = sessionStorage.getItem('currentSession');
-            if (!sessionData) return Promise.resolve(null);
+            if (!sessionData) return null;
 
             const session = JSON.parse(sessionData);
 
             if (session && session.isActive) {
-                // Actualizar última actividad
+                // Actualizar actividad
                 session.lastActivity = new Date().toISOString();
                 sessionStorage.setItem('currentSession', JSON.stringify(session));
 
-                // Actualizar en base de datos JSON
-                JsonDatabaseService.updateSession(session);
+                // Actualizar en base de datos
+                await JsonDatabaseService.updateSession(session);
 
-                return Promise.resolve(session);
-            } else {
-                sessionStorage.removeItem('currentSession');
-                return Promise.resolve(null);
+                return session;
             }
-        } catch (error) {
-            console.error('Error getting session:', error);
+
             sessionStorage.removeItem('currentSession');
-            return Promise.resolve(null);
+            return null;
+
+        } catch (error) {
+            console.error('Error obteniendo sesión:', error);
+            sessionStorage.removeItem('currentSession');
+            return null;
         }
     }
 
+    // Obtener todas las sesiones activas
     static async getAllActiveSessions() {
         try {
             const sessions = await JsonDatabaseService.getActiveSessions();
-            const activeSessions = Object.values(sessions).filter(session => session.isActive);
-            return activeSessions;
+            return Object.values(sessions).filter(session => session.isActive);
         } catch (error) {
-            console.error('Error getting all active sessions:', error);
+            console.error('Error obteniendo sesiones activas:', error);
             return [];
         }
     }
 
+    // Verificar si un jugador está tomado
     static async isPlayerTaken(playerName) {
-        const sessions = await this.getAllActiveSessions();
-        return sessions.some(session => session.playerName === playerName);
+        try {
+            const sessions = await this.getAllActiveSessions();
+            return sessions.some(session => session.playerName === playerName);
+        } catch (error) {
+            console.error('Error verificando jugador:', error);
+            return false;
+        }
     }
 
-    static updateSessionActivity() {
-        return this.getCurrentSession().then(session => {
-            if (session) {
-                session.lastActivity = new Date().toISOString();
-                sessionStorage.setItem('currentSession', JSON.stringify(session));
-                JsonDatabaseService.updateSession(session);
-            }
-            return session;
-        });
-    }
-
-    static async logout() {
+    // Actualizar actividad de sesión
+    static async updateSessionActivity() {
         const session = await this.getCurrentSession();
         if (session) {
-            // Marcar como inactiva
-            session.isActive = false;
+            session.lastActivity = new Date().toISOString();
             sessionStorage.setItem('currentSession', JSON.stringify(session));
-
-            // Actualizar en base de datos JSON
             await JsonDatabaseService.updateSession(session);
         }
-
-        // Limpiar sessionStorage
-        sessionStorage.removeItem('currentSession');
-
-        return Promise.resolve();
+        return session;
     }
 
+    // Cerrar sesión
+    static async logout() {
+        try {
+            const session = await this.getCurrentSession();
+            if (session) {
+                session.isActive = false;
+                sessionStorage.setItem('currentSession', JSON.stringify(session));
+                await JsonDatabaseService.updateSession(session);
+            }
+
+            sessionStorage.removeItem('currentSession');
+        } catch (error) {
+            console.error('Error cerrando sesión:', error);
+            sessionStorage.removeItem('currentSession');
+        }
+    }
+
+    // Enmascarar nombre de usuario
     static maskUserName(userName) {
         if (!userName || userName.length < 3) return '***';
-
         const firstChar = userName.charAt(0);
         const lastChar = userName.charAt(userName.length - 1);
         const maskedLength = userName.length - 2;
         const mask = '*'.repeat(maskedLength);
-
         return firstChar + mask + lastChar;
     }
 
-    static cleanupExpiredSessions() {
-        return JsonDatabaseService.cleanupExpiredSessions();
+    // Limpiar sesiones expiradas
+    static async cleanupExpiredSessions() {
+        await JsonDatabaseService.cleanupExpiredSessions();
     }
 
+    // Forzar logout de todos
     static async forceLogoutAllUsers() {
         try {
             const sessions = await JsonDatabaseService.getActiveSessions();
-
-            // Marcar todas como inactivas
             Object.keys(sessions).forEach(sessionId => {
                 sessions[sessionId].isActive = false;
             });
-
             await JsonDatabaseService.saveActiveSessions(sessions);
-            return Promise.resolve();
         } catch (error) {
-            console.error('Error forcing logout all users:', error);
-            return Promise.resolve();
+            console.error('Error forzando logout:', error);
         }
     }
 }

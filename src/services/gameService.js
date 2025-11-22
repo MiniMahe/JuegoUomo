@@ -2,6 +2,7 @@ import SessionService from './sessionService';
 import JsonDatabaseService from './jsonDatabaseService';
 
 class GameService {
+    // Crear juego
     static async createGame(adminData) {
         const game = {
             id: 'game_' + Date.now(),
@@ -16,62 +17,78 @@ class GameService {
                 assignedLocation: null,
                 assignedAt: null
             })),
-            items: adminData.items,
-            locations: adminData.locations,
+            items: adminData.items || [],
+            locations: adminData.locations || [],
             assignments: [],
-            name: adminData.name
+            name: adminData.name || 'Partida ' + new Date().toLocaleDateString()
         };
 
         await JsonDatabaseService.saveCurrentGame(game);
         return game;
     }
 
+    // Obtener juego actual
     static async getGame() {
         return await JsonDatabaseService.getCurrentGame();
     }
 
+    // Guardar juego
     static async saveGame(game) {
         await JsonDatabaseService.saveCurrentGame(game);
     }
 
+    // Reiniciar juego
     static async resetGame() {
         await JsonDatabaseService.saveCurrentGame(null);
     }
 
+    // Verificar si usuarios pueden unirse
     static async canUserJoin() {
         const game = await this.getGame();
         return game && game.state === 'ready';
     }
 
+    // Obtener participantes disponibles
     static async getAvailableParticipants() {
-        const game = await this.getGame();
-        if (!game) return [];
+        try {
+            const game = await this.getGame();
+            if (!game) return [];
 
-        const activeSessions = await SessionService.getAllActiveSessions();
-        const takenPlayers = new Set(activeSessions.map(session => session.playerName));
+            const activeSessions = await SessionService.getAllActiveSessions();
+            const takenPlayers = new Set(activeSessions.map(session => session.playerName));
 
-        return game.participants.filter(p => !takenPlayers.has(p.name));
+            return game.participants.filter(p => !takenPlayers.has(p.name));
+        } catch (error) {
+            console.error('Error obteniendo participantes:', error);
+            return [];
+        }
     }
 
+    // Asignar jugador a usuario
     static async assignPlayerToUser(playerName, userName) {
         const game = await this.getGame();
         if (!game) throw new Error('No hay juego activo');
 
         const isTaken = await SessionService.isPlayerTaken(playerName);
-        if (isTaken) throw new Error('Personaje ya seleccionado');
+        if (isTaken) throw new Error('Este personaje ya fue seleccionado');
 
         const participant = game.participants.find(p => p.name === playerName);
         if (!participant) throw new Error('Jugador no encontrado');
 
+        // Actualizar participante
         participant.userName = userName;
         participant.joinedAt = new Date().toISOString();
 
+        // Crear sesión
         await SessionService.createSession(userName, playerName);
+
+        // Guardar cambios
         await this.saveGame(game);
 
         return participant;
     }
 
+    // Realizar asignaciones aleatorias
     static async performRandomAssignments() {
         const game = await this.getGame();
         if (!game) throw new Error('No hay juego activo');
@@ -81,9 +98,9 @@ class GameService {
         const availableLocations = [...game.locations];
 
         // Validaciones
-        if (unassignedParticipants.length === 0) throw new Error('No hay participantes');
-        if (unassignedParticipants.length > availableItems.length) throw new Error('No hay objetos suficientes');
-        if (unassignedParticipants.length > availableLocations.length) throw new Error('No hay ubicaciones suficientes');
+        if (unassignedParticipants.length === 0) throw new Error('No hay participantes para asignar');
+        if (unassignedParticipants.length > availableItems.length) throw new Error('No hay suficientes objetos');
+        if (unassignedParticipants.length > availableLocations.length) throw new Error('No hay suficientes ubicaciones');
 
         // Mezclar arrays
         const shuffleArray = (array) => {
@@ -110,29 +127,36 @@ class GameService {
         return game;
     }
 
+    // Obtener asignación de usuario
     static async getUserAssignment(userName) {
         const game = await this.getGame();
         if (!game) return null;
         return game.participants.find(p => p.userName === userName && p.assigned);
     }
 
+    // Obtener estadísticas del juego
     static async getGameStats() {
-        const game = await this.getGame();
-        if (!game) return null;
+        try {
+            const game = await this.getGame();
+            if (!game) return null;
 
-        const activeSessions = await SessionService.getAllActiveSessions();
-        const assignedPlayers = game.participants.filter(p => p.assigned).length;
+            const activeSessions = await SessionService.getAllActiveSessions();
+            const assignedPlayers = game.participants.filter(p => p.assigned).length;
 
-        return {
-            totalPlayers: game.participants.length,
-            joinedPlayers: activeSessions.length,
-            assignedPlayers: assignedPlayers,
-            availablePlayers: game.participants.length - activeSessions.length,
-            state: game.state
-        };
+            return {
+                totalPlayers: game.participants.length,
+                joinedPlayers: activeSessions.length,
+                assignedPlayers: assignedPlayers,
+                availablePlayers: game.participants.length - activeSessions.length,
+                state: game.state
+            };
+        } catch (error) {
+            console.error('Error obteniendo estadísticas:', error);
+            return null;
+        }
     }
 
-    // NUEVO MÉTODO: Obtener jugadores conectados
+    // NUEVO: Obtener jugadores conectados
     static async getConnectedPlayers() {
         try {
             const activeSessions = await SessionService.getAllActiveSessions();
@@ -142,18 +166,18 @@ class GameService {
                 joinedAt: session.createdAt
             }));
         } catch (error) {
-            console.error('Error getting connected players:', error);
+            console.error('Error obteniendo jugadores conectados:', error);
             return [];
         }
     }
 
-    // NUEVO MÉTODO: Verificar acceso de admin
+    // NUEVO: Verificar acceso de admin
     static async canAccessAdmin() {
         try {
             const session = await SessionService.getCurrentSession();
-            return !session; // Solo acceso si NO hay sesión activa
+            return !session;
         } catch (error) {
-            console.error('Error checking admin access:', error);
+            console.error('Error verificando acceso admin:', error);
             return true;
         }
     }

@@ -9,54 +9,34 @@ class JsonDatabaseService {
         lastUpdated: new Date().toISOString()
     };
 
+    // Cargar datos
     static async loadGameData() {
         try {
-            // Si no hay configuración, usar localStorage
-            if (this.BIN_ID === 'default-bin-id' || this.API_KEY === 'default-api-key') {
-                const localData = localStorage.getItem('game_data');
-                return localData ? JSON.parse(localData) : { ...this.defaultData };
-            }
-
-            const response = await fetch(`${this.API_URL}/${this.BIN_ID}/latest`, {
-                headers: {
-                    'X-Master-Key': this.API_KEY,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) throw new Error('JSONBin error');
-
-            const result = await response.json();
-            return result.record;
-        } catch (error) {
-            console.log('Usando datos locales:', error.message);
+            // Usar localStorage como fallback
             const localData = localStorage.getItem('game_data');
-            return localData ? JSON.parse(localData) : { ...this.defaultData };
-        }
-    }
-
-    static async saveGameData(data) {
-        data.lastUpdated = new Date().toISOString();
-
-        try {
-            if (this.BIN_ID !== 'default-bin-id' && this.API_KEY !== 'default-api-key') {
-                await fetch(`${this.API_URL}/${this.BIN_ID}`, {
-                    method: 'PUT',
-                    headers: {
-                        'X-Master-Key': this.API_KEY,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
+            if (localData) {
+                return JSON.parse(localData);
             }
+            return { ...this.defaultData };
         } catch (error) {
-            console.log('Guardando solo localmente:', error.message);
+            console.log('Error cargando datos, usando valores por defecto');
+            return { ...this.defaultData };
         }
-
-        localStorage.setItem('game_data', JSON.stringify(data));
-        return true;
     }
 
+    // Guardar datos
+    static async saveGameData(data) {
+        try {
+            data.lastUpdated = new Date().toISOString();
+            localStorage.setItem('game_data', JSON.stringify(data));
+            return true;
+        } catch (error) {
+            console.error('Error guardando datos:', error);
+            return false;
+        }
+    }
+
+    // Operaciones del juego
     static async getCurrentGame() {
         const data = await this.loadGameData();
         return data.currentGame;
@@ -68,6 +48,7 @@ class JsonDatabaseService {
         return await this.saveGameData(data);
     }
 
+    // Operaciones de sesiones
     static async getActiveSessions() {
         const data = await this.loadGameData();
         return data.activeSessions || {};
@@ -79,7 +60,7 @@ class JsonDatabaseService {
         return await this.saveGameData(data);
     }
 
-    // NUEVO MÉTODO: Actualizar una sesión específica
+    // NUEVO: Actualizar sesión específica
     static async updateSession(session) {
         const sessions = await this.getActiveSessions();
         sessions[session.id] = {
@@ -89,18 +70,11 @@ class JsonDatabaseService {
         return await this.saveActiveSessions(sessions);
     }
 
-    // NUEVO MÉTODO: Remover una sesión
-    static async removeSession(sessionId) {
-        const sessions = await this.getActiveSessions();
-        delete sessions[sessionId];
-        return await this.saveActiveSessions(sessions);
-    }
-
-    // NUEVO MÉTODO: Limpiar sesiones expiradas
+    // NUEVO: Limpiar sesiones expiradas
     static async cleanupExpiredSessions() {
         const sessions = await this.getActiveSessions();
         const now = new Date();
-        const expiredTime = 2 * 60 * 60 * 1000; // 2 horas
+        const expiredTime = 2 * 60 * 60 * 1000;
 
         let updated = false;
         Object.keys(sessions).forEach(sessionId => {
@@ -117,19 +91,9 @@ class JsonDatabaseService {
         }
     }
 
+    // NUEVO: Test de conexión (simulado)
     static async testConnection() {
-        if (this.BIN_ID === 'default-bin-id' || this.API_KEY === 'default-api-key') {
-            return false;
-        }
-
-        try {
-            const response = await fetch(`${this.API_URL}/${this.BIN_ID}/latest`, {
-                headers: { 'X-Master-Key': this.API_KEY }
-            });
-            return response.ok;
-        } catch (error) {
-            return false;
-        }
+        return true; // Siempre true para localStorage
     }
 }
 
