@@ -24,24 +24,6 @@ const CharacterSelection = ({ onCharacterSelected }) => {
 
     const loadGameData = async () => {
         try {
-            setLoading(true);
-
-            // Cargar jugadores disponibles
-            const players = await GameService.getAvailableParticipants();
-            setAvailablePlayers(players || []);
-
-            // Cargar jugadores conectados (con manejo de error)
-            try {
-                const connected = await GameService.getConnectedPlayers();
-                setConnectedPlayers(connected || []);
-            } catch (connError) {
-                console.log('Error cargando jugadores conectados:', connError.message);
-                setConnectedPlayers([]);
-            }
-
-            // Cargar estadísticas del juego
-            const stats = await GameService.getGameStats();
-            setGameStats(stats);
 
         } catch (error) {
             console.error('Error cargando datos del juego:', error);

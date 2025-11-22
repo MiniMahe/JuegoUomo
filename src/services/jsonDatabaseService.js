@@ -12,7 +12,15 @@ class JsonDatabaseService {
     // Cargar datos
     static async loadGameData() {
         try {
-            // Usar localStorage como fallback
+            // Intentar cargar de JSONBin primero
+            const remoteData = await this.fetchFromJsonBin();
+            if (remoteData) {
+                // Actualizar local storage con datos remotos
+                localStorage.setItem('game_data', JSON.stringify(remoteData));
+                return remoteData;
+            }
+
+            // Fallback a localStorage
             const localData = localStorage.getItem('game_data');
             if (localData) {
                 return JSON.parse(localData);
@@ -28,10 +36,52 @@ class JsonDatabaseService {
     static async saveGameData(data) {
         try {
             data.lastUpdated = new Date().toISOString();
+
+            // Guardar localmente primero (optimista)
             localStorage.setItem('game_data', JSON.stringify(data));
+
+            // Guardar en JSONBin
+            await this.saveToJsonBin(data);
+
             return true;
         } catch (error) {
             console.error('Error guardando datos:', error);
+            return false;
+        }
+    }
+
+    // Helpers JSONBin
+    static async fetchFromJsonBin() {
+        if (!this.BIN_ID || this.BIN_ID === 'default-bin-id') return null;
+        try {
+            const response = await fetch(`${this.API_URL}/${this.BIN_ID}/latest`, {
+                headers: {
+                    'X-Master-Key': this.API_KEY
+                }
+            });
+            if (!response.ok) return null;
+            const data = await response.json();
+            return data.record;
+        } catch (error) {
+            console.error('JSONBin fetch error:', error);
+            return null;
+        }
+    }
+
+    static async saveToJsonBin(data) {
+        if (!this.BIN_ID || this.BIN_ID === 'default-bin-id') return false;
+        try {
+            const response = await fetch(`${this.API_URL}/${this.BIN_ID}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Master-Key': this.API_KEY
+                },
+                body: JSON.stringify(data)
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('JSONBin save error:', error);
             return false;
         }
     }
@@ -60,7 +110,7 @@ class JsonDatabaseService {
         return await this.saveGameData(data);
     }
 
-    // NUEVO: Actualizar sesión específica
+    // Actualizar sesión específica
     static async updateSession(session) {
         const sessions = await this.getActiveSessions();
         sessions[session.id] = {
@@ -70,7 +120,7 @@ class JsonDatabaseService {
         return await this.saveActiveSessions(sessions);
     }
 
-    // NUEVO: Limpiar sesiones expiradas
+    // Limpiar sesiones expiradas
     static async cleanupExpiredSessions() {
         const sessions = await this.getActiveSessions();
         const now = new Date();
@@ -91,9 +141,10 @@ class JsonDatabaseService {
         }
     }
 
-    // NUEVO: Test de conexión (simulado)
+    // Test de conexión
     static async testConnection() {
-        return true; // Siempre true para localStorage
+        const remoteData = await this.fetchFromJsonBin();
+        return !!remoteData;
     }
 }
 
