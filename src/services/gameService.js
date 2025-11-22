@@ -10,7 +10,11 @@ class GameService {
             participants: adminData.participants.map(name => ({
                 name: typeof name === 'string' ? name : name.name,
                 assigned: false,
-                userName: null
+                userName: null,
+                joinedAt: null,
+                assignedItem: null,
+                assignedLocation: null,
+                assignedAt: null
             })),
             items: adminData.items,
             locations: adminData.locations,
@@ -126,6 +130,32 @@ class GameService {
             availablePlayers: game.participants.length - activeSessions.length,
             state: game.state
         };
+    }
+
+    // NUEVO MÉTODO: Obtener jugadores conectados
+    static async getConnectedPlayers() {
+        try {
+            const activeSessions = await SessionService.getAllActiveSessions();
+            return activeSessions.map(session => ({
+                playerName: session.playerName,
+                userName: SessionService.maskUserName(session.userName),
+                joinedAt: session.createdAt
+            }));
+        } catch (error) {
+            console.error('Error getting connected players:', error);
+            return [];
+        }
+    }
+
+    // NUEVO MÉTODO: Verificar acceso de admin
+    static async canAccessAdmin() {
+        try {
+            const session = await SessionService.getCurrentSession();
+            return !session; // Solo acceso si NO hay sesión activa
+        } catch (error) {
+            console.error('Error checking admin access:', error);
+            return true;
+        }
     }
 }
 

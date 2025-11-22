@@ -14,10 +14,10 @@ const CharacterSelection = ({ onCharacterSelected }) => {
     useEffect(() => {
         loadGameData();
 
-        // Configurar intervalo para actualizar datos cada 3 segundos
+        // Configurar intervalo para actualizar datos cada 5 segundos
         const interval = setInterval(() => {
             loadGameData();
-        }, 3000);
+        }, 5000);
 
         return () => clearInterval(interval);
     }, []);
@@ -28,11 +28,16 @@ const CharacterSelection = ({ onCharacterSelected }) => {
 
             // Cargar jugadores disponibles
             const players = await GameService.getAvailableParticipants();
-            setAvailablePlayers(players);
+            setAvailablePlayers(players || []);
 
-            // Cargar jugadores conectados
-            const connected = await GameService.getConnectedPlayers();
-            setConnectedPlayers(connected);
+            // Cargar jugadores conectados (con manejo de error)
+            try {
+                const connected = await GameService.getConnectedPlayers();
+                setConnectedPlayers(connected || []);
+            } catch (connError) {
+                console.log('Error cargando jugadores conectados:', connError.message);
+                setConnectedPlayers([]);
+            }
 
             // Cargar estadísticas del juego
             const stats = await GameService.getGameStats();
@@ -79,7 +84,7 @@ const CharacterSelection = ({ onCharacterSelected }) => {
 
         } catch (error) {
             setError(error.message);
-            // Recargar lista si hay error (posiblemente alguien más tomó el personaje)
+            // Recargar lista si hay error
             await loadGameData();
         }
     };
@@ -117,21 +122,21 @@ const CharacterSelection = ({ onCharacterSelected }) => {
                 <div className="selection-form">
                     {/* Campo de nombre de usuario */}
                     <div className="form-group">
-                        <label htmlFor="username-input">TU NOMBRE DE USUARIO (ÚNICO):</label>
+                        <label htmlFor="username-input">TU NOMBRE DE USUARIO:</label>
                         <input
                             id="username-input"
                             type="text"
                             value={userName}
                             onChange={(e) => setUserName(e.target.value)}
                             onKeyPress={handleKeyPress}
-                            placeholder="Ingresa cómo quieres que te llamen en el juego (2-20 caracteres)"
+                            placeholder="Ingresa tu nombre (2-20 caracteres)"
                             className="username-input"
                             maxLength={20}
                             autoFocus
                         />
                         <div className="input-feedback">
                             {userName.trim().length > 0 && userName.trim().length < 2 && (
-                                <span className="warning">⚠️ El nombre debe tener al menos 2 caracteres</span>
+                                <span className="warning">⚠️ Mínimo 2 caracteres</span>
                             )}
                             {userName.trim().length >= 2 && (
                                 <span className="success">✅ Nombre válido</span>
@@ -143,29 +148,20 @@ const CharacterSelection = ({ onCharacterSelected }) => {
                     {/* Selección de personaje */}
                     <div className="form-group">
                         <label>SELECCIONA TU PERSONAJE:</label>
-                        <div className="players-info">
-                            <span className="available-count">
-                                {availablePlayers.length} de {gameStats?.totalPlayers || 0} disponibles
-                            </span>
-                        </div>
 
                         <div className="players-grid">
                             {availablePlayers.length === 0 ? (
                                 <div className="no-players">
                                     <div className="no-players-icon">🚫</div>
-                                    <h4>¡Todos los personajes han sido seleccionados!</h4>
-                                    <p>Espera a que el administrador inicie una nueva partida.</p>
-                                    <button onClick={loadGameData} className="refresh-btn">
-                                        🔄 Actualizar Lista
-                                    </button>
+                                    <h4>¡No hay personajes disponibles!</h4>
+                                    <p>Espera a que el administrador configure la partida.</p>
                                 </div>
                             ) : (
                                 availablePlayers.map((player, index) => (
                                     <div
                                         key={index}
-                                        className={`player-card ${selectedPlayer === player.name ? 'selected' : ''} ${player.assigned ? 'assigned' : 'available'
-                                            }`}
-                                        onClick={() => !player.assigned && setSelectedPlayer(player.name)}
+                                        className={`player-card ${selectedPlayer === player.name ? 'selected' : ''}`}
+                                        onClick={() => setSelectedPlayer(player.name)}
                                     >
                                         <div className="player-avatar">
                                             {player.name.charAt(0).toUpperCase()}
@@ -173,20 +169,12 @@ const CharacterSelection = ({ onCharacterSelected }) => {
                                         <div className="player-info">
                                             <span className="player-name">{player.name}</span>
                                             <span className="player-status">
-                                                {player.assigned ? (
-                                                    <>
-                                                        <span className="assigned-to">✅ Asignado a: {player.userName}</span>
-                                                    </>
-                                                ) : (
-                                                    <span className="available-text">🎯 Disponible</span>
-                                                )}
+                                                🎯 Disponible
                                             </span>
                                         </div>
-                                        {!player.assigned && (
-                                            <div className="selection-indicator">
-                                                {selectedPlayer === player.name ? '✓' : '+'}
-                                            </div>
-                                        )}
+                                        <div className="selection-indicator">
+                                            {selectedPlayer === player.name ? '✓' : '+'}
+                                        </div>
                                     </div>
                                 ))
                             )}
@@ -207,14 +195,14 @@ const CharacterSelection = ({ onCharacterSelected }) => {
                         disabled={!isFormValid}
                         className={`join-btn ${isFormValid ? 'enabled' : 'disabled'}`}
                     >
-                        {isFormValid ? '🎮 CONFIRMAR Y UNIRME' : 'SELECCIONA PERSONAJE Y NOMBRE'}
+                        {isFormValid ? '🎮 CONFIRMAR Y UNIRME' : 'COMPLETA LOS DATOS'}
                     </button>
                 </div>
 
                 {/* Información del juego */}
                 <div className="game-info">
                     <div className="info-section">
-                        <h4>👥 JUGADORES CONECTADOS ({connectedPlayers.length})</h4>
+                        <h4>👥 JUGADORES CONECTADOS</h4>
                         <div className="connected-players">
                             {connectedPlayers.length === 0 ? (
                                 <p className="no-connections">No hay jugadores conectados aún</p>
@@ -224,9 +212,6 @@ const CharacterSelection = ({ onCharacterSelected }) => {
                                         <div key={index} className="connected-player">
                                             <span className="player-badge">{player.playerName}</span>
                                             <span className="user-name">como "{player.userName}"</span>
-                                            <span className="connection-time">
-                                                {new Date(player.joinedAt).toLocaleTimeString()}
-                                            </span>
                                         </div>
                                     ))}
                                 </div>
@@ -236,59 +221,32 @@ const CharacterSelection = ({ onCharacterSelected }) => {
 
                     <div className="info-section">
                         <h4>📊 ESTADO DE LA PARTIDA</h4>
-                        {gameStats && (
+                        {gameStats ? (
                             <div className="game-stats">
                                 <div className="stat-item">
-                                    <span>Total de jugadores:</span>
+                                    <span>Total jugadores:</span>
                                     <strong>{gameStats.totalPlayers}</strong>
                                 </div>
                                 <div className="stat-item">
-                                    <span>Conectados ahora:</span>
-                                    <strong className="connected-count">{gameStats.joinedPlayers}</strong>
+                                    <span>Conectados:</span>
+                                    <strong>{gameStats.joinedPlayers}</strong>
                                 </div>
                                 <div className="stat-item">
                                     <span>Disponibles:</span>
-                                    <strong className="available-count">{gameStats.availablePlayers}</strong>
+                                    <strong>{gameStats.availablePlayers}</strong>
                                 </div>
-                                <div className="stat-item">
-                                    <span>Asignados:</span>
-                                    <strong className="assigned-count">{gameStats.assignedPlayers}</strong>
-                                </div>
-                                <div className="progress-bar">
-                                    <div
-                                        className="progress-fill"
-                                        style={{
-                                            width: `${gameStats.totalPlayers > 0 ? (gameStats.joinedPlayers / gameStats.totalPlayers) * 100 : 0}%`
-                                        }}
-                                    ></div>
-                                </div>
-                                <p className="progress-text">
-                                    {gameStats.joinedPlayers} de {gameStats.totalPlayers} jugadores conectados
-                                </p>
                             </div>
+                        ) : (
+                            <p>No hay partida activa</p>
                         )}
-                    </div>
-
-                    <div className="info-section">
-                        <h4>💡 INSTRUCCIONES</h4>
-                        <ul className="instructions">
-                            <li>✅ <strong>Elige un nombre único</strong> - Sé creativo pero respetuoso</li>
-                            <li>✅ <strong>Selecciona un personaje disponible</strong> - No puedes cambiar después</li>
-                            <li>✅ <strong>Confirma tu selección</strong> - Tu personaje se bloqueará para otros</li>
-                            <li>🎯 <strong>Espera las asignaciones</strong> - El admin asignará objetos y ubicaciones</li>
-                            <li>🔄 <strong>Mantén la ventana abierta</strong> - Las actualizaciones son automáticas</li>
-                        </ul>
                     </div>
                 </div>
 
                 {/* Botón de actualización manual */}
                 <div className="refresh-section">
-                    <button onClick={loadGameData} className="refresh-btn secondary">
-                        🔄 Actualizar Lista de Jugadores
+                    <button onClick={loadGameData} className="refresh-btn">
+                        🔄 Actualizar
                     </button>
-                    <span className="last-update">
-                        Última actualización: {new Date().toLocaleTimeString()}
-                    </span>
                 </div>
             </div>
         </div>

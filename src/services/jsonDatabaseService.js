@@ -79,6 +79,44 @@ class JsonDatabaseService {
         return await this.saveGameData(data);
     }
 
+    // NUEVO MÉTODO: Actualizar una sesión específica
+    static async updateSession(session) {
+        const sessions = await this.getActiveSessions();
+        sessions[session.id] = {
+            ...session,
+            lastUpdated: new Date().toISOString()
+        };
+        return await this.saveActiveSessions(sessions);
+    }
+
+    // NUEVO MÉTODO: Remover una sesión
+    static async removeSession(sessionId) {
+        const sessions = await this.getActiveSessions();
+        delete sessions[sessionId];
+        return await this.saveActiveSessions(sessions);
+    }
+
+    // NUEVO MÉTODO: Limpiar sesiones expiradas
+    static async cleanupExpiredSessions() {
+        const sessions = await this.getActiveSessions();
+        const now = new Date();
+        const expiredTime = 2 * 60 * 60 * 1000; // 2 horas
+
+        let updated = false;
+        Object.keys(sessions).forEach(sessionId => {
+            const session = sessions[sessionId];
+            const lastActivity = new Date(session.lastActivity || session.lastUpdated);
+            if (now - lastActivity > expiredTime) {
+                delete sessions[sessionId];
+                updated = true;
+            }
+        });
+
+        if (updated) {
+            await this.saveActiveSessions(sessions);
+        }
+    }
+
     static async testConnection() {
         if (this.BIN_ID === 'default-bin-id' || this.API_KEY === 'default-api-key') {
             return false;

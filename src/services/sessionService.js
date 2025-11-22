@@ -8,20 +8,14 @@ class SessionService {
             playerName: playerName,
             createdAt: new Date().toISOString(),
             lastActivity: new Date().toISOString(),
-            isActive: true,
-            // Información adicional para tracking
-            userAgent: navigator.userAgent,
-            ip: 'unknown' // En un backend real obtendrías la IP
+            isActive: true
         };
 
         // Guardar en sessionStorage para esta pestaña
         sessionStorage.setItem('currentSession', JSON.stringify(session));
 
         // Guardar en base de datos JSON compartida
-        JsonDatabaseService.updateSession({
-            ...session,
-            userName: this.maskUserName(session.userName) // Enmascarar para privacidad
-        });
+        JsonDatabaseService.updateSession(session);
 
         return Promise.resolve(session);
     }
@@ -39,10 +33,7 @@ class SessionService {
                 sessionStorage.setItem('currentSession', JSON.stringify(session));
 
                 // Actualizar en base de datos JSON
-                JsonDatabaseService.updateSession({
-                    ...session,
-                    userName: this.maskUserName(session.userName)
-                });
+                JsonDatabaseService.updateSession(session);
 
                 return Promise.resolve(session);
             } else {
@@ -77,10 +68,7 @@ class SessionService {
             if (session) {
                 session.lastActivity = new Date().toISOString();
                 sessionStorage.setItem('currentSession', JSON.stringify(session));
-                JsonDatabaseService.updateSession({
-                    ...session,
-                    userName: this.maskUserName(session.userName)
-                });
+                JsonDatabaseService.updateSession(session);
             }
             return session;
         });
@@ -94,10 +82,7 @@ class SessionService {
             sessionStorage.setItem('currentSession', JSON.stringify(session));
 
             // Actualizar en base de datos JSON
-            await JsonDatabaseService.updateSession({
-                ...session,
-                userName: this.maskUserName(session.userName)
-            });
+            await JsonDatabaseService.updateSession(session);
         }
 
         // Limpiar sessionStorage
@@ -136,18 +121,6 @@ class SessionService {
             console.error('Error forcing logout all users:', error);
             return Promise.resolve();
         }
-    }
-
-    // Obtener sesiones por jugador
-    static async getSessionsByPlayer(playerName) {
-        const sessions = await this.getAllActiveSessions();
-        return sessions.filter(session => session.playerName === playerName);
-    }
-
-    // Obtener sesiones por usuario
-    static async getSessionsByUser(userName) {
-        const sessions = await this.getAllActiveSessions();
-        return sessions.filter(session => session.userName === this.maskUserName(userName));
     }
 }
 
