@@ -1,5 +1,6 @@
+import JsonDatabaseService from './jsonDatabaseService';
+
 class SessionService {
-    // Usar sessionStorage para sesiones (no se comparte entre pestañas)
     static createSession(userName, playerName) {
         const session = {
             id: 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
@@ -7,15 +8,20 @@ class SessionService {
             playerName: playerName,
             createdAt: new Date().toISOString(),
             lastActivity: new Date().toISOString(),
-            isActive: true
+            isActive: true,
+            // Información adicional para tracking
+            userAgent: navigator.userAgent,
+            ip: 'unknown' // En un backend real obtendrías la IP
         };
 
-        // Guardar en sessionStorage (no se comparte entre pestañas)
+        // Guardar en sessionStorage para esta pestaña
         sessionStorage.setItem('currentSession', JSON.stringify(session));
 
-        // También guardar en localStorage para que el admin pueda ver las conexiones
-        // pero sin información sensible
-        this.updateActiveSessions(session);
+        // Guardar en base de datos JSON compartida
+        JsonDatabaseService.updateSession({
+            ...session,
+            userName: this.maskUserName(session.userName) // Enmascarar para privacidad
+        });
 
         return Promise.resolve(session);
     }
@@ -27,12 +33,16 @@ class SessionService {
 
             const session = JSON.parse(sessionData);
 
-            // Verificar si la sesión sigue activa
             if (session && session.isActive) {
                 // Actualizar última actividad
                 session.lastActivity = new Date().toISOString();
                 sessionStorage.setItem('currentSession', JSON.stringify(session));
-                this.updateActiveSessions(session);
+
+                // Actualizar en base de datos JSON
+                JsonDatabaseService.updateSession({
+                    ...session,
+                    userName: this.maskUserName(session.userName)
+                });
 
                 return Promise.resolve(session);
             } else {
@@ -46,67 +56,20 @@ class SessionService {
         }
     }
 
-    static updateActiveSessions(session) {
+    static async getAllActiveSessions() {
         try {
-            const activeSessions = this.getAllActiveSessionsFromStorage();
-
-            // Actualizar o agregar la sesión actual
-            activeSessions[session.id] = {
-                id: session.id,
-                playerName: session.playerName,
-                userName: this.maskUserName(session.userName), // Información enmascarada
-                joinedAt: session.createdAt,
-                lastActivity: session.lastActivity,
-                isActive: session.isActive
-            };
-
-            // Limpiar sesiones expiradas
-            this.cleanupExpiredSessionsFromStorage(activeSessions);
-
-            // Guardar en localStorage (solo para el admin)
-            localStorage.setItem('activeSessions', JSON.stringify(activeSessions));
-        } catch (error) {
-            console.error('Error updating active sessions:', error);
-        }
-    }
-
-    static getAllActiveSessionsFromStorage() {
-        try {
-            return JSON.parse(localStorage.getItem('activeSessions') || '{}');
-        } catch (error) {
-            console.error('Error getting active sessions:', error);
-            return {};
-        }
-    }
-
-    static cleanupExpiredSessionsFromStorage(sessions) {
-        const now = new Date();
-        const expiredTime = 2 * 60 * 60 * 1000; // 2 horas
-
-        Object.keys(sessions).forEach(sessionId => {
-            const session = sessions[sessionId];
-            const lastActivity = new Date(session.lastActivity);
-            if (now - lastActivity > expiredTime) {
-                delete sessions[sessionId];
-            }
-        });
-    }
-
-    static getAllActiveSessions() {
-        try {
-            const sessions = this.getAllActiveSessionsFromStorage();
+            const sessions = await JsonDatabaseService.getActiveSessions();
             const activeSessions = Object.values(sessions).filter(session => session.isActive);
-            return Promise.resolve(activeSessions);
+            return activeSessions;
         } catch (error) {
             console.error('Error getting all active sessions:', error);
-            return Promise.resolve([]);
+            return [];
         }
     }
 
-    static isPlayerTaken(playerName) {
-        return this.getAllActiveSessions().then(sessions => {
-            return sessions.some(session => session.playerName === playerName);
-        });
+    static async isPlayerTaken(playerName) {
+        const sessions = await this.getAllActiveSessions();
+        return sessions.some(session => session.playerName === playerName);
     }
 
     static updateSessionActivity() {
@@ -114,30 +77,33 @@ class SessionService {
             if (session) {
                 session.lastActivity = new Date().toISOString();
                 sessionStorage.setItem('currentSession', JSON.stringify(session));
-                this.updateActiveSessions(session);
+                JsonDatabaseService.updateSession({
+                    ...session,
+                    userName: this.maskUserName(session.userName)
+                });
             }
             return session;
         });
     }
 
-    static logout() {
-        return this.getCurrentSession().then(session => {
-            if (session) {
-                // Marcar como inactiva en sessionStorage
-                session.isActive = false;
-                sessionStorage.setItem('currentSession', JSON.stringify(session));
+    static async logout() {
+        const session = await this.getCurrentSession();
+        if (session) {
+            // Marcar como inactiva
+            session.isActive = false;
+            sessionStorage.setItem('currentSession', JSON.stringify(session));
 
-                // También remover de las sesiones activas en localStorage
-                const activeSessions = this.getAllActiveSessionsFromStorage();
-                delete activeSessions[session.id];
-                localStorage.setItem('activeSessions', JSON.stringify(activeSessions));
-            }
+            // Actualizar en base de datos JSON
+            await JsonDatabaseService.updateSession({
+                ...session,
+                userName: this.maskUserName(session.userName)
+            });
+        }
 
-            // Limpiar sessionStorage
-            sessionStorage.removeItem('currentSession');
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('currentSession');
 
-            return Promise.resolve();
-        });
+        return Promise.resolve();
     }
 
     static maskUserName(userName) {
@@ -151,33 +117,37 @@ class SessionService {
         return firstChar + mask + lastChar;
     }
 
-    // Limpieza general de sesiones expiradas
     static cleanupExpiredSessions() {
-        try {
-            const sessions = this.getAllActiveSessionsFromStorage();
-            this.cleanupExpiredSessionsFromStorage(sessions);
-            localStorage.setItem('activeSessions', JSON.stringify(sessions));
-            return Promise.resolve();
-        } catch (error) {
-            console.error('Error cleaning expired sessions:', error);
-            return Promise.resolve();
-        }
+        return JsonDatabaseService.cleanupExpiredSessions();
     }
 
-    // Forzar logout de todos los usuarios (solo admin)
-    static forceLogoutAllUsers() {
+    static async forceLogoutAllUsers() {
         try {
-            // Limpiar todas las sesiones activas
-            localStorage.removeItem('activeSessions');
+            const sessions = await JsonDatabaseService.getActiveSessions();
 
-            // Nota: No podemos limpiar sessionStorage de otras pestañas
-            // Los usuarios se darán cuenta cuando intenten actualizar
+            // Marcar todas como inactivas
+            Object.keys(sessions).forEach(sessionId => {
+                sessions[sessionId].isActive = false;
+            });
 
+            await JsonDatabaseService.saveActiveSessions(sessions);
             return Promise.resolve();
         } catch (error) {
             console.error('Error forcing logout all users:', error);
             return Promise.resolve();
         }
+    }
+
+    // Obtener sesiones por jugador
+    static async getSessionsByPlayer(playerName) {
+        const sessions = await this.getAllActiveSessions();
+        return sessions.filter(session => session.playerName === playerName);
+    }
+
+    // Obtener sesiones por usuario
+    static async getSessionsByUser(userName) {
+        const sessions = await this.getAllActiveSessions();
+        return sessions.filter(session => session.userName === this.maskUserName(userName));
     }
 }
 
