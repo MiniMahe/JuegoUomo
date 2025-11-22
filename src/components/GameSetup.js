@@ -10,6 +10,13 @@ const GameSetup = ({ onGameCreated }) => {
     const [step, setStep] = useState(1);
 
     const handleCreateGame = () => {
+        console.log('🎮 Intentando crear juego...', {
+            participants,
+            items,
+            locations,
+            gameName
+        });
+
         if (participants.length === 0) {
             alert('Debes agregar al menos un participante');
             return;
@@ -25,9 +32,9 @@ const GameSetup = ({ onGameCreated }) => {
             return;
         }
 
-        // Formatear participantes
+        // Formatear participantes correctamente
         const formattedParticipants = participants.map(name => ({
-            name: name.trim().toUpperCase(),
+            name: typeof name === 'string' ? name.trim().toUpperCase() : name.name,
             assigned: false,
             userName: null,
             joinedAt: null,
@@ -43,13 +50,36 @@ const GameSetup = ({ onGameCreated }) => {
             locations: locations.map(location => location.trim().toUpperCase())
         };
 
-        const game = GameService.createGame(gameData);
-        GameService.startGame();
+        console.log('📦 Datos del juego a crear:', gameData);
 
-        onGameCreated(game);
+        try {
+            // Verificar que GameService.createGame existe
+            if (typeof GameService.createGame !== 'function') {
+                throw new Error('GameService.createGame no es una función');
+            }
+
+            const game = GameService.createGame(gameData);
+            console.log('✅ Juego creado exitosamente:', game);
+
+            // Iniciar el juego
+            GameService.startGame();
+
+            onGameCreated(game);
+        } catch (error) {
+            console.error('❌ Error creando juego:', error);
+            alert('Error al crear el juego: ' + error.message);
+        }
     };
 
-    const participantNames = participants.map(p => typeof p === 'string' ? p : p.name);
+    // Asegurarse de que participants sea un array de strings para CrudPanel
+    const participantNames = participants.map(p =>
+        typeof p === 'string' ? p : p.name
+    );
+
+    const handleParticipantsUpdate = (names) => {
+        console.log('🔄 Actualizando participantes:', names);
+        setParticipants(names);
+    };
 
     return (
         <div className="game-setup">
@@ -70,11 +100,15 @@ const GameSetup = ({ onGameCreated }) => {
                         <CrudPanel
                             title="LISTA DE PARTICIPANTES"
                             items={participantNames}
-                            onItemsUpdate={setParticipants}
+                            onItemsUpdate={handleParticipantsUpdate}
                             placeholder="Ingresa nombres de participantes separados por comas: JUAN, MARÍA, PEDRO..."
                         />
                         <div className="step-actions">
-                            <button onClick={() => setStep(2)} disabled={participants.length === 0}>
+                            <button
+                                onClick={() => setStep(2)}
+                                disabled={participants.length === 0}
+                                className="step-button"
+                            >
                                 CONTINUAR → OBJETOS
                             </button>
                         </div>
@@ -100,8 +134,14 @@ const GameSetup = ({ onGameCreated }) => {
                             )}
                         </div>
                         <div className="step-actions">
-                            <button onClick={() => setStep(1)}>← VOLVER</button>
-                            <button onClick={() => setStep(3)} disabled={items.length < participants.length}>
+                            <button onClick={() => setStep(1)} className="step-button secondary">
+                                ← VOLVER
+                            </button>
+                            <button
+                                onClick={() => setStep(3)}
+                                disabled={items.length < participants.length}
+                                className="step-button"
+                            >
                                 CONTINUAR → UBICACIONES
                             </button>
                         </div>
@@ -127,8 +167,14 @@ const GameSetup = ({ onGameCreated }) => {
                             )}
                         </div>
                         <div className="step-actions">
-                            <button onClick={() => setStep(2)}>← VOLVER</button>
-                            <button onClick={() => setStep(4)} disabled={locations.length < participants.length}>
+                            <button onClick={() => setStep(2)} className="step-button secondary">
+                                ← VOLVER
+                            </button>
+                            <button
+                                onClick={() => setStep(4)}
+                                disabled={locations.length < participants.length}
+                                className="step-button"
+                            >
                                 CONTINUAR → REVISAR
                             </button>
                         </div>
@@ -149,6 +195,7 @@ const GameSetup = ({ onGameCreated }) => {
                                         value={gameName}
                                         onChange={(e) => setGameName(e.target.value)}
                                         placeholder="Nombre de la partida"
+                                        className="game-name-input"
                                     />
                                 </div>
                             </div>
@@ -184,8 +231,10 @@ const GameSetup = ({ onGameCreated }) => {
                         </div>
 
                         <div className="step-actions">
-                            <button onClick={() => setStep(3)}>← VOLVER</button>
-                            <button onClick={handleCreateGame} className="create-game-btn">
+                            <button onClick={() => setStep(3)} className="step-button secondary">
+                                ← VOLVER
+                            </button>
+                            <button onClick={handleCreateGame} className="step-button primary create-game-btn">
                                 🎮 CREAR PARTIDA
                             </button>
                         </div>
